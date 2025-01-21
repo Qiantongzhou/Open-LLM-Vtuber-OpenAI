@@ -1,0 +1,40 @@
+{
+	"Version": 3,
+	"FileReferences": {
+		"Moc": "兔喽.moc3",
+		"Textures": [
+			"兔喽.4096/texture_00.png",
+			"兔喽.4096/texture_01.png",
+			"兔喽.4096/texture_02.png",
+			"兔喽.4096/texture_03.png",
+			"兔喽.4096/texture_04.png",
+			"兔喽.4096/texture_05.png",
+			"兔喽.4096/texture_06.png"
+		],
+		"Physics": "兔喽.physics3.json",
+		"DisplayInfo": "兔喽.cdi3.json"
+	},
+	"expressions": [
+    {"name": "f01", "file": "∑扇子.exp3.json"},
+    {"name": "f02", "file": "侧发.exp3.json"},
+    {"name": "f03", "file": "兔兔.exp3.json"},
+    {"name": "f04", "file": "口水.exp3.json"}
+
+
+  ],
+	"Groups": [
+		{
+			"Target": "Parameter",
+			"Name": "EyeBlink",
+			"Ids": [
+				"ParamEyeROpen",
+				"ParamEyeLOpen"
+			]
+		},
+		{
+			"Target": "Parameter",
+			"Name": "LipSync",
+			"Ids": []
+		}
+	]
+}

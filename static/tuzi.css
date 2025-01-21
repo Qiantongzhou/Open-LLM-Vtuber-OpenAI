@@ -1,0 +1,242 @@
+body {
+
+  font-family: "Nunito", sans-serif;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
+#snow{
+	background: none;
+	background-image: url('./images/header/sn1.png'), url('./images/header/sn2.png'), url('./images/header/sn3.png');
+	height: 100%;
+	left: 0;
+	position: absolute;
+	top: 0;
+	width: 100%;
+	z-index:1;
+	-webkit-animation: snow 10s linear infinite;
+	-moz-animation: snow 10s linear infinite;
+	-ms-animation: snow 10s linear infinite;
+	animation: snow 10s linear infinite;
+}
+#background{
+    background-image: url("./bg/cityscape.jpeg");
+  background-repeat: no-repeat;
+  background-size: cover;
+  background-position: center center;
+  background-attachment: fixed;
+    font-family: "Nunito", sans-serif;
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+}
+@keyframes snow {
+  0% {background-position: 0px 0px, 0px 0px, 0px 0px;}
+  50% {background-position: 500px 500px, 100px 200px, -100px 150px;}
+  100% {background-position: 500px 1000px, 200px 400px, -100px 300px;}
+}
+@-moz-keyframes snow {
+  0% {background-position: 0px 0px, 0px 0px, 0px 0px;}
+  50% {background-position: 500px 500px, 100px 200px, -100px 150px;}
+  100% {background-position: 400px 1000px, 200px 400px, 100px 300px;}
+}
+@-webkit-keyframes snow {
+  0% {background-position: 0px 0px, 0px 0px, 0px 0px;}
+  50% {background-position: 500px 500px, 100px 200px, -100px 150px;}
+  100% {background-position: 500px 1000px, 200px 400px, -100px 300px;}
+}
+@-ms-keyframes snow {
+  0% {background-position: 0px 0px, 0px 0px, 0px 0px;}
+  50% {background-position: 500px 500px, 100px 200px, -100px 150px;}
+  100% {background-position: 500px 1000px, 200px 400px, -100px 300px;}
+}
+
+/* Container in top-left corner */
+.top-left {
+  position: fixed;
+  top: 10px;
+  left: 10px;
+  width: 10%;
+  z-index: 1001;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: rgba(255, 245, 248, 0.85);
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(255,182,193,0.3);
+  padding: 10px;
+}
+
+/* WebSocket Status Button */
+#wsStatus {
+  background-color: #f48fa5; /* soft pink */
+  color: #fff;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 0.9em;
+  transition: background-color 0.3s, transform 0.2s;
+}
+#wsStatus:hover {
+  background-color: #f27795;
+  transform: scale(1.05);
+}
+#wsStatus.connected {
+  background-color: #a3eeaf;
+  color: #333;
+}
+#wsStatus.connected:hover {
+  background-color: #90da9a;
+}
+
+/* State Display - info only */
+#stateDisplay {
+  background-color: #9cbff9;
+  color: #fff;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  font-size: 0.9em;
+  pointer-events: none;
+}
+
+/* WebSocket URL Input */
+#wsUrl {
+  padding: 6px;
+  width: 90%;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  font-size: 0.9em;
+  background: #fffafc;
+}
+#wsUrl:focus {
+  border-color: #f48fa5;
+  outline: none;
+}
+
+select {
+  padding: 6px;
+  border-radius: 6px;
+  border: 1px solid #ccc;
+  background-color: #fffafc;
+  color: #333;
+  font-size: 0.9em;
+  cursor: pointer;
+  transition: border-color 0.3s, transform 0.2s;
+}
+select:hover {
+  border-color: #f48fa5;
+  transform: scale(1.02);
+}
+select:focus {
+  outline: none;
+  border-color: #f48fa5;
+}
+
+.sensitivity-container {
+  display: flex;
+  align-items: center;
+  background-color: #f48fa5;
+  padding: 5px 10px;
+  border-radius: 6px;
+}
+
+.sensitivity-label {
+  color: #fff;
+  margin-right: 5px;
+  font-size: 14px;
+  text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+/* Bottom message container */
+.bottom-container {
+  position: fixed;
+  bottom: 0;
+  margin-right: 25%;
+  right: 0;
+  width: 50%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 1000;
+}
+
+.fixed-bottom {
+  width: 100%;
+  background-color: rgba(33, 33, 33, 0.8);
+  color: white;
+  text-align: left;
+  padding: 1em;
+  box-sizing: border-box;
+  max-height: 30vh;
+  overflow-y: auto;
+  font-size: 1.8em;
+  line-height: 1.4;
+  border-top: 2px solid #f48fa5;
+  font-weight: 400;
+  border-radius: 8px 8px 0 0;
+}
+
+/* Control buttons bar */
+.control-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  padding: 10px;
+  background-color: rgba(33, 33, 33, 0.8);
+  width: 100%;
+  box-sizing: border-box;
+  border-top: 1px solid #444;
+}
+
+.control-buttons button {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 6px;
+  background: #f48fa5;
+  color: white;
+  cursor: pointer;
+  font-size: 0.9em;
+  transition: background-color 0.3s, transform 0.2s;
+}
+.control-buttons button:hover {
+  background-color: #f27795;
+  transform: scale(1.05);
+}
+.control-buttons button:active {
+  transform: scale(1.0);
+}
+
+canvas {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 1;
+}
+
+/* Text input field */
+#textInput {
+  width: 90%;
+  margin: 0.3em 5%;
+  padding: 0.7em;
+  font-size: 0.9em;
+  background-color: rgba(33, 33, 33, 0.7);
+  border: 1px solid rgba(128, 128, 128, 0.5);
+  border-radius: 6px;
+  color: white;
+  text-align: left;
+  box-sizing: border-box;
+  transition: border-color 0.3s, background-color 0.3s;
+}
+#textInput:focus {
+  outline: none;
+  border-color: rgba(128, 128, 128, 0.8);
+  background-color: rgba(33, 33, 33, 0.8);
+}
+
+.hidden {
+  display: none;
+}

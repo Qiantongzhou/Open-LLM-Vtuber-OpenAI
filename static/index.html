@@ -1,0 +1,551 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>开放式LLM虚拟主播</title>
+
+    <!-- pixi live2d dependencies -->
+    <!-- 加载Cubism和PixiJS -->
+    <script src="libs/live2dcubismcore.min.js"></script>
+    <script src="libs/live2d.min.js"></script>
+    <script src="libs/pixi.min.js"></script>
+    <script src="libs/index.min.js"></script>
+
+    <script src="TaskQueue.js"></script>
+    <script src="AudioMotionManager.js"></script>
+
+    <!-- 语音激活检测 -->
+    <script src="libs/ort.js"></script>
+    <script src="libs/bundle.min.js"></script>
+
+    <link rel="stylesheet" href="tuzi.css">
+</head>
+
+<body>
+<div id="snow"></div>
+<div id="background"></div>
+    <div class="top-left">
+        <button id="wsStatus">未连接</button>
+        <button id="stateDisplay">状态：正在加载</button>
+        <button id="pointerInteractionBtn">👀 鼠标交互已启用</button>
+        <input type="text" id="wsUrl" placeholder="WebSocket地址">
+        <div class="sensitivity-container">
+            <span class="sensitivity-label">语音检测阈值：</span>
+            <input type="number" id="speechProbThreshold" min="1" max="100" value="97" title="语音检测可信度阈值(%)">
+        </div>
+        <select id="configDropdown" aria-label="配置选择">
+            <option value="">选择配置</option>
+        </select>
+        <select id="bgDropdown" aria-label="背景选择">
+            <option value="">选择背景</option>
+        </select>
+        <select id="expressionSelect">
+         <option value="">Select Expression</option>
+        </select>
+    </div>
+
+    <canvas id="canvas"></canvas>
+
+    <div class="bottom-container">
+        <div class="fixed-bottom">
+            <div id="message"></div>
+            <input type="text" id="textInput" class="hidden" placeholder="在此输入您的消息...">
+        </div>
+        <div class="control-buttons">
+            <button id="micToggle">🎙️麦克风已开启</button>
+            <button id="interruptBtn">❌语音打断已关闭</button>
+            <button id="sendText">📝显示文本输入</button>
+        </div>
+    </div>
+
+    <script src="./live2d.js"></script>
+
+    <script>
+        // 状态说明：
+        // idle：LLM处于空闲状态，等待用户输入。
+        // thinking-speaking：LLM正在思考或讲话中。
+        // interrupted：LLM正在被用户打断。
+        let state = "idle";
+        let audioPlayer = new Audio();
+        let voiceInterruptionOn = false;
+        let fullResponse = ""; // 当前对话链中的完整响应文本
+        const audioManager = new AudioMotionManager();
+        const stateDisplay = document.getElementById('stateDisplay');
+
+        function updateStateDisplay() {
+            stateDisplay.textContent = `状态：${state}`;
+        }
+
+        function setState(newState) {
+            state = newState;
+            updateStateDisplay();
+        }
+
+        function interrupt() {
+            console.log("😡👎 正在打断对话链");
+            console.log("发送中: " + JSON.stringify({ type: "interrupt-signal", text: fullResponse }))
+            ws.send(JSON.stringify({ type: "interrupt-signal", text: fullResponse }));
+            setState("interrupted");
+            model2.stopSpeaking();
+            audioTaskQueue.clearQueue();
+            console.log("已打断！");
+        }
+
+        let myvad;
+        let previousTriggeredProbability = 0;
+        let speechProbThreshold = document.getElementById('speechProbThreshold');
+
+        window.addEventListener('load', function() {
+            const savedThreshold = localStorage.getItem('speechProbThreshold');
+            if (savedThreshold) {
+                speechProbThreshold.value = savedThreshold;
+            }
+
+            const savedBackground = localStorage.getItem('selectedBackground');
+            if (savedBackground) {
+                setTimeout(() => {
+                    bgDropdown.value = savedBackground;
+                    document.getElementById("background").style.backgroundImage = `url('./bg/${savedBackground}')`;
+                }, 1000);
+            }
+        });
+
+        async function init_vad() {
+            myvad = await vad.MicVAD.new({
+                preSpeechPadFrames: 20,
+                positiveSpeechThreshold: speechProbThreshold.value / 100,
+                onSpeechStart: () => {
+                    console.log("检测到语音开始: " + previousTriggeredProbability);
+                    if (state === "thinking-speaking") {
+                        interrupt();
+                    } else {
+                        console.log("😀👍 未打断，正常对话");
+                    }
+                },
+                onFrameProcessed: (probs) => {
+                    if (probs["isSpeech"] > previousTriggeredProbability) {
+                        previousTriggeredProbability = probs["isSpeech"];
+                    }
+                },
+                onVADMisfire: () => {
+                    console.log("VAD故障。LLM无法听到您的声音。");
+                    if (state === "interrupted") {
+                        state = "idle";
+                    }
+                    document.getElementById("message").textContent = "LLM无法听到您的声音。";
+                },
+                onSpeechEnd: (audio) => {
+                    // 当说话结束时触发
+                    audioTaskQueue.clearQueue();
+
+                    if (!voiceInterruptionOn) {
+                        stop_mic();
+                    }
+
+                    if (ws && ws.readyState === WebSocket.OPEN) {
+                        sendAudioPartition(audio);
+                    }
+                }
+            });
+        }
+
+        speechProbThreshold.addEventListener('change', async function() {
+            localStorage.setItem('speechProbThreshold', this.value);
+
+            if (myvad) {
+                await myvad.pause();
+                await init_vad();
+                if (micToggleState) {
+                    await myvad.start();
+                } else {
+                    await myvad.pause();
+                }
+            }
+        });
+
+        const chunkSize = 4096;
+        async function sendAudioPartition(audio) {
+            console.log(audio)
+            // 按块发送音频数据到后端
+            for (let index = 0; index < audio.length; index += chunkSize) {
+                const endIndex = Math.min(index + chunkSize, audio.length);
+                const chunk = audio.slice(index, endIndex);
+                ws.send(JSON.stringify({ type: "mic-audio-data", audio: chunk }));
+            }
+            ws.send(JSON.stringify({ type: "mic-audio-end" }));
+        }
+
+        let ws;
+        const wsStatus = document.getElementById('wsStatus');
+        const wsUrl = document.getElementById('wsUrl');
+        const interruptBtn = document.getElementById('interruptBtn');
+        const micToggle = document.getElementById('micToggle');
+        const configDropdown = document.getElementById('configDropdown');
+        const bgDropdown = document.getElementById('bgDropdown');
+
+        wsUrl.value = "ws://127.0.0.1:12393/client-ws";
+        // 如果在服务器上运行
+        if (window.location.protocol.startsWith("http")) {
+            console.log("正在服务器环境中运行");
+            wsUrl.value = "/client-ws";
+        } else {
+            console.log("正在本地环境中运行");
+        }
+
+        function connectWebSocket() {
+            ws = new WebSocket(wsUrl.value);
+
+            ws.onopen = function () {
+                setState("idle");
+                console.log("已连接到WebSocket");
+                wsStatus.textContent = "已连接";
+                wsStatus.classList.add('connected');
+                fetchConfigurations();
+                fetchBackgrounds();
+            };
+
+            ws.onclose = function () {
+                setState("idle");
+                console.log("WebSocket连接已断开");
+                wsStatus.textContent = "未连接";
+                wsStatus.classList.remove('connected');
+                taskQueue.clearQueue();
+            };
+
+            ws.onmessage = function (event) {
+                handleMessage(JSON.parse(event.data));
+            };
+        }
+
+        wsStatus.addEventListener('click', connectWebSocket);
+
+        function handleMessage(message) {
+            console.log("收到后端消息: \n", message);
+            switch (message.type) {
+                case "full-text":
+                    document.getElementById("message").textContent = message.text;
+                    console.log("完整文本：", message.text);
+                    break;
+                case "control":
+                    switch (message.text) {
+                        case "start-mic":
+                            start_mic();
+                            break;
+                        case "stop-mic":
+                            stop_mic();
+                            break;
+                        case "conversation-chain-start":
+                            setState("thinking-speaking");
+                            fullResponse = "";
+                            audioTaskQueue = new TaskQueue(20);
+                            break;
+                        case "conversation-chain-end":
+                            setState("idle");
+                            if (!voiceInterruptionOn) {
+                                start_mic();
+                            }
+                            break;
+                    }
+                    break;
+                case "expression":
+                    setExpression(message.text);
+                    break;
+                case "mouth":
+                    //setMouth(Number(message.text));
+                    break;
+                case "audio":
+                    if (state == "interrupted") {
+                        console.log("音频播放被拦截。句子：", message.text);
+                    } else {
+                        addAudioTask(message.audio, message.volumes, message.slice_length, message.text, message.expressions);
+                        console.log(message.expressions)
+                        if(message.expressions === "sadness") {
+
+                         setExpressionWithTimeout("哭泣");
+                        }else if(message.expressions === "smirk") {
+
+                         setExpressionWithTimeout("脸红");
+                        }else if(message.expressions === "anger") {
+
+                         setExpressionWithTimeout("申请");
+                        }else if(message.expressions === "joy") {
+
+                         setExpressionWithTimeout("脸红");
+                        }else if(message.expressions === "surprise") {
+
+                         setExpressionWithTimeout("星星眼");
+                        }
+
+
+
+                    }
+                    break;
+                case "set-model":
+                    console.log("设置模型：", message.text);
+                    live2dModule.init().then(() => {
+                        live2dModule.loadModel(message.text);
+                    });
+                    break;
+                case "listExpressions":
+                    console.log(listSupportedExpressions());
+                    break;
+                case "config-files":
+                    populateConfigDropdown(message.files);
+                    break;
+                case "config-switched":
+                    console.log(message.message);
+                    document.getElementById("message").textContent = "配置切换成功！";
+                    setState("idle");
+
+                    if (micStateBeforeConfigSwitch) {
+                        start_mic();
+                    }
+                    micStateBeforeConfigSwitch = null;
+                    break;
+                case "background-files":
+                    populateBgDropdown(message.files);
+                    break;
+                default:
+                    console.error("未知消息类型: " + message.type);
+                    console.log(message);
+            }
+        }
+
+        function fetchConfigurations() {
+            ws.send(JSON.stringify({ type: "fetch-configs" }));
+        }
+
+        function fetchBackgrounds() {
+            ws.send(JSON.stringify({ type: "fetch-backgrounds" }));
+        }
+
+        function populateConfigDropdown(files) {
+            configDropdown.innerHTML = '<option value="">选择配置</option>';
+            files.forEach(file => {
+                const option = document.createElement('option');
+                option.value = file;
+                option.textContent = file;
+                configDropdown.appendChild(option);
+            });
+        }
+
+        function populateBgDropdown(files) {
+            bgDropdown.innerHTML = '<option value="">选择背景</option>';
+            files.forEach(file => {
+                const option = document.createElement('option');
+                option.value = file;
+                option.textContent = file;
+                bgDropdown.appendChild(option);
+            });
+        }
+
+        configDropdown.addEventListener('change', function () {
+            const selectedConfig = configDropdown.value;
+            if (selectedConfig) {
+                setState("switching-config");
+                document.getElementById("message").textContent = "正在切换配置...";
+                micStateBeforeConfigSwitch = micToggleState;
+                if (micToggleState) {
+                    stop_mic();
+                }
+
+                interrupt();
+                ws.send(JSON.stringify({ type: "switch-config", file: selectedConfig }));
+            }
+        });
+
+        bgDropdown.addEventListener('change', function () {
+            const selectedBg = bgDropdown.value;
+            if (selectedBg) {
+                document.getElementById("background").style.backgroundImage = `url('./bg/${selectedBg}')`;
+                localStorage.setItem('selectedBackground', selectedBg);
+            }
+        });
+
+        function setExpression(expressionIndex) {
+            expressionIndex = parseInt(expressionIndex);
+            model2.internalModel.motionManager.expressionManager.setExpression(expressionIndex);
+            console.info(`>> [x] -> 设置表情为: (${expressionIndex})`);
+        }
+
+        function listSupportedExpressions() {
+            emoMap = model2.internalModel.motionManager.expressionManager.emotionMap;
+            console.log(emoMap);
+        }
+
+        function setMouth(mouthY,mouthX) {
+            if (typeof model2.internalModel.coreModel.setParameterValueById === 'function') {
+                model2.internalModel.coreModel.setParameterValueById('ParamMouthOpenY', mouthY);
+                model2.internalModel.coreModel.setParameterValueById('ParamMouthForm', mouthX);
+            } else {
+                model2.internalModel.coreModel.setParamFloat('PARAM_MOUTH_OPEN_Y', mouthY);
+                model2.internalModel.coreModel.setParamFloat('PARAM_MOUTH_FORM', mouthX);
+            }
+        }
+
+        audioTaskQueue = new TaskQueue(20);
+        async function addAudioTask(audio_base64, volumes, slice_length, text = null, expression_list = null) {
+            console.log(`1. 添加音频任务 ${text} 到队列`);
+
+
+            if (state === "interrupted") {
+                console.log("因被打断，跳过音频任务");
+                return;
+            }
+
+            audioTaskQueue.addTask(() => {
+                return new Promise((resolve, reject) => {
+                    audioManager.playAudioLipSync2(audio_base64, volumes, slice_length, text, expression_list,true, onComplete=resolve);
+
+                }).catch(error => {
+                    console.log("音频任务错误:", error);
+
+                });
+            });
+        }
+
+        function playAudioLipSync(audio_base64, volumes, slice_length, text = null, expression_list = null, onComplete) {
+            if (state === "interrupted") {
+                console.error("音频播放被阻止。状态：", state);
+                onComplete();
+                return;
+            }
+
+            fullResponse += text;
+
+            if (text) {
+                document.getElementById("message").textContent = text;
+            }
+
+            const displayExpression = expression_list ? expression_list[0] : null;
+            //print(displayExpression)
+            console.log("开始播放音频：", text);
+
+            try {
+                model2.speak("data:audio/wav;base64," + audio_base64, {
+                    expression: displayExpression,
+                    resetExpression: true,
+                    onFinish: () => {
+                        console.log("语音播放结束");
+                        onComplete();
+                    },
+                    onError: (error) => {
+                        console.error("音频播放错误:", error);
+                        onComplete();
+                    }
+                });
+            } catch (error) {
+                console.error("speak函数错误:", error);
+                onComplete();
+            }
+        }
+        function playAudioLipSync2(audio_base64, volumes, slice_length, text = null, expression_list = null, onComplete) {
+            if (state === "interrupted") {
+                console.error("音频播放被阻止。状态：", state);
+                onComplete();
+                return;
+            }
+
+            fullResponse += text;
+
+            if (text) {
+                document.getElementById("message").textContent = text;
+            }
+
+            const displayExpression = expression_list ? expression_list[0] : null;
+            //print(displayExpression)
+            console.log("开始播放音频：", text);
+
+            try {
+                model2.internalModel.motionManager.speak("data:audio/wav;base64," + audio_base64, {
+                    expression: displayExpression,
+                    resetExpression: true,
+                    onFinish: () => {
+                        console.log("语音播放结束");
+                        onComplete();
+                    },
+                    onError: (error) => {
+                        console.error("音频播放错误:", error);
+                        onComplete();
+                    }
+                });
+            } catch (error) {
+                console.error("speak函数错误:", error);
+                onComplete();
+            }
+        }
+        async function start_mic() {
+            try {
+                if (myvad == null) {
+                    await init_vad();
+                }
+                console.log("麦克风开始监听");
+                await myvad.start();
+                micToggleState = true;
+                micToggle.textContent = "🎙️麦克风已开启";
+            } catch (error) {
+                console.error("麦克风启动失败:", error);
+                micToggleState = false;
+                micToggle.textContent = "❌麦克风已关闭";
+            }
+        }
+
+        function stop_mic() {
+            console.log("麦克风停止监听");
+            if (myvad) {
+                myvad.pause();
+            }
+            micToggleState = false;
+            micToggle.textContent = "❌麦克风已关闭";
+        }
+
+        interruptBtn.addEventListener('click', function () {
+            voiceInterruptionOn = !voiceInterruptionOn;
+            interruptBtn.textContent = voiceInterruptionOn ? "🖐️语音打断已开启" : "❌语音打断已关闭";
+        });
+
+        let micToggleState = true;
+        micToggle.addEventListener('click', function () {
+            micToggleState ? stop_mic() : start_mic();
+        });
+
+        connectWebSocket();
+
+        const textInput = document.getElementById('textInput');
+        const sendText = document.getElementById('sendText');
+
+        function handleTextSubmit() {
+            const text = textInput.value;
+            if (text && ws && ws.readyState === WebSocket.OPEN) {
+                if (state === "thinking-speaking") {
+                    interrupt();
+                } else {
+                    console.log("😀👍 未打断，正常对话");
+                }
+                ws.send(JSON.stringify({
+                    type: "text-input",
+                    text: text
+                }));
+                textInput.value = '';
+                audioTaskQueue.clearQueue();
+            }
+        }
+
+        let textInputVisible = false;
+        sendText.addEventListener('click', function() {
+            textInputVisible = !textInputVisible;
+            textInput.classList.toggle('hidden');
+            sendText.textContent = textInputVisible ? "📝隐藏文本输入" : "📝显示文本输入";
+        });
+
+        textInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                handleTextSubmit();
+            }
+        });
+    </script>
+</body>
+
+</html>
