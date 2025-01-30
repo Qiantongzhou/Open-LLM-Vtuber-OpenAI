@@ -329,13 +329,14 @@ class OpenLLMVTuberMain:
                             json_pattern = r'(\{.*?\})'
                             match = re.search(json_pattern, sentence_buffer)
                             action = None
+
                             if match:
                                 json_str = match.group(1)
                                 print("json_str1")
                                 sentence_buffer=sentence_buffer.replace(match.group(1), "").strip()
                                 try:
                                     data = json.loads(json_str)
-                                    action = data.get("action", None)
+                                    action = data.get("play_song", None)
                                 except json.JSONDecodeError:
                                     pass
 
@@ -357,7 +358,7 @@ class OpenLLMVTuberMain:
                                     "REMOVE_SPECIAL_CHAR", True
                                 ),
                             )
-                            if action == "play_song":
+                            if action:
                                 # Remove the JSON part from the sentence to "clean it up"
                                 # For example, just strip out the matched JSON substring
 
@@ -365,7 +366,7 @@ class OpenLLMVTuberMain:
                                 # e.g. read it out first, or ignore it.
                                 # For now, we assume we just go to play a random song.
                                 print("playsong")
-                                audio_filepath = self.songFunc._get_song_audio_file_path(None)
+                                audio_filepath = self.songFunc._get_song_audio_file_path(action)
                                 if self.verbose:
                                     print(f"Action detected: play_song. Returning song file {audio_filepath}")
                             else:

@@ -71,7 +71,7 @@
         let audioPlayer = new Audio();
         let voiceInterruptionOn = false;
         let fullResponse = ""; // 当前对话链中的完整响应文本
-        const audioManager = new AudioMotionManager();
+        const audioManager = new AudioMotionManager(new AnimationController());
         const stateDisplay = document.getElementById('stateDisplay');
 
         function updateStateDisplay() {

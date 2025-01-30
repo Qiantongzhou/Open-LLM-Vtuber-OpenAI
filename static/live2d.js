@@ -36,6 +36,7 @@ var pointerInteractionEnabled = true;
   ];
   const expdir="exp/兔喽/";
 let expressionsData
+let originalEyeBlink = null;
 const live2dModule = (function () {
   const live2d = PIXI.live2d;
 
@@ -75,6 +76,7 @@ const live2dModule = (function () {
     });
 
     model2 = models[0];
+    originalEyeBlink=model2.internalModel.motionManager.eyeBlink;
     //console.log(model2.internalModel.coreModel.setParameterValueById("Param9", 1.0))
 
     if (!modelInfo.initialXshift) modelInfo.initialXshift = 0;
@@ -151,10 +153,14 @@ document.addEventListener('DOMContentLoaded', function () {
     }
 
     if (!pointerInteractionEnabled) {
+
+      model2.internalModel.eyeBlink = null;
+
       // When interaction turns off, start idle motion
       // startIdleMotion();
       // startEyeMotion();
     } else {
+      model2.internalModel.eyeBlink=originalEyeBlink;
       // When interaction turns on, stop idle motion and reset
       // stopIdleMotion();
       resetFocus();

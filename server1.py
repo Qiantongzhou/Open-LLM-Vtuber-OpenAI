@@ -32,10 +32,10 @@ from live2d_model import Live2dModel
 from tts.stream_audio import AudioPayloadPreparer
 import __init__
 
-TEST_ROOM_IDS = [5624404]  # Replace with your desired Bilibili room IDs
+TEST_ROOM_IDS = [30015166]  # Replace with your desired Bilibili room IDs
 #tuzi 30015166
 #donggua 5624404
-SESSDATA = '1a3d4708%2C1750656364%2C39f05%2Ac2CjBYSCiFItUml9nvWN-gporagHBlYvCbOAsVgbmLCtcTsDiadRR_V-kDpEYhhUetJk4SVnBhQkxwSmt4bngtcjlrQ3o2T01CS3p4a1l4dUhpNVNadXl3NDRHSkR0bms5WGZKNGM1NTN1SzNaTkdZcTJoT3AzRDVqaG01OGdJbklKMFFlbUpGR2hRIIEC'
+SESSDATA = '0b069e51%2C1753621014%2C99009%2A12CjAM7l4CfgFA2euRy1gIDI-5dbOZyeoUqfSDkenOvGXH2G1Xh8DDHxLl3h-FN0yiQmcSVlhMekhkaXB3UEdoU1EwZ2RrS2dERzdFM1kteXNRcXQ2aFZqNS1qei1HdkQySUZyWlhrMUZvSnY4cGlRTW14YlBHSm41VTFSYVhUYmtDQnJaekVTTzVnIIEC'
 
 class WebSocketServer:
     def __init__(self, open_llm_vtuber_main_config: Dict | None = None):
@@ -571,9 +571,9 @@ class MyBiliHandler(blivedm.BaseHandler):
                 self.last_processed_time = time.time()
             else:
                 # All queues are empty
-                # if time.time() - self.last_processed_time > IDLE_THRESHOLD:
-                #     await self._add_idle_message(IDLE_THRESHOLD)
-                #     self.last_processed_time = time.time()
+                if time.time() - self.last_processed_time > IDLE_THRESHOLD:
+                    await self._add_idle_message(IDLE_THRESHOLD)
+                    self.last_processed_time = time.time()
                 await asyncio.sleep(IDLE_CHECK_INTERVAL)
 
     async def _process_message(self, timestamp: float, user_input_str: str,
