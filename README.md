@@ -1,5 +1,7 @@
 # Open-LLM-VTuber
-
+# This porject aim for bilbili vtuber
+# The documentation is outdated
+# Please contact 兔孜 in bilibili for more info.
 [中文](https://github.com/t41372/Open-LLM-VTuber/blob/main/README.CN.md)
 
 [![GitHub release](https://img.shields.io/github/v/release/t41372/Open-LLM-VTuber)](https://github.com/t41372/Open-LLM-VTuber/releases) 
